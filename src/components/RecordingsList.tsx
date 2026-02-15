@@ -15,6 +15,10 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareRecordingId, setShareRecordingId] = useState<string | null>(null);
+  const [shareIncludeTranscript, setShareIncludeTranscript] = useState(true);
+  const [shareIncludeAudio, setShareIncludeAudio] = useState(true);
 
   useEffect(() => {
     loadRecordings();
@@ -67,32 +71,36 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
     }
   };
 
-  const shareRecording = async (recording: Recording) => {
+  const shareRecording = (recording: Recording) => {
+    if (recording.transcript) {
+      // Show dialog with checkboxes
+      setShareRecordingId(recording.id);
+      setShareIncludeTranscript(true);
+      setShareIncludeAudio(true);
+      setShowShareDialog(true);
+    } else {
+      // No transcript, just share audio
+      shareAudioFile(recording);
+    }
+  };
+
+  const handleShareConfirm = async () => {
+    const recording = recordings.find(r => r.id === shareRecordingId);
+    if (!recording) return;
+
+    setShowShareDialog(false);
+
     try {
-      // Check if Web Share API is available
-      if (!navigator.share) {
-        alert('Sharing is not supported on this browser');
+      if (!shareIncludeTranscript && !shareIncludeAudio) {
+        alert('Please select at least one option to share!');
         return;
       }
 
-      if (recording.transcript) {
-        // Ask what to include using Yes/No dialogs
-        const includeTranscript = window.confirm('Include transcript?');
-        const includeAudio = window.confirm('Include audio file?');
-
-        if (!includeTranscript && !includeAudio) {
-          alert('Nothing selected to share!');
-          return;
-        }
-
-        if (includeTranscript && includeAudio) {
-          await shareBoth(recording);
-        } else if (includeTranscript) {
-          await shareTranscript(recording);
-        } else if (includeAudio) {
-          await shareAudioFile(recording);
-        }
-      } else {
+      if (shareIncludeTranscript && shareIncludeAudio) {
+        await shareBoth(recording);
+      } else if (shareIncludeTranscript) {
+        await shareTranscript(recording);
+      } else if (shareIncludeAudio) {
         await shareAudioFile(recording);
       }
     } catch (error: any) {
@@ -122,27 +130,34 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
         { type: recording.audioBlob.type }
       );
 
+      // Try sharing if supported
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Voice Recording',
-          text: `Recording from ${formatDate(recording.date)}`,
-        });
-      } else {
-        // Fallback: download the file
-        const url = URL.createObjectURL(recording.audioBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `recording-${recording.id}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        alert(`Audio file downloaded as: recording-${recording.id}.${ext}`);
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Voice Recording',
+            text: `Recording from ${formatDate(recording.date)}`,
+          });
+          return; // Success!
+        } catch (shareErr: any) {
+          console.log('Share failed, falling back to download:', shareErr);
+          // Fall through to download
+        }
       }
-    } catch (error) {
+
+      // Fallback: download the file
+      const url = URL.createObjectURL(recording.audioBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `recording-${recording.id}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert(`Audio file downloaded as: recording-${recording.id}.${ext}`);
+    } catch (error: any) {
       console.error('Share audio error:', error);
-      alert('Failed to share audio file');
+      alert(`Failed to share audio: ${error.message}`);
     }
   };
 
@@ -382,6 +397,44 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
       <button className="refresh-button" onClick={loadRecordings} disabled={refreshing}>
         🔄 Refresh
       </button>
+
+      {/* Share Dialog */}
+      {showShareDialog && (
+        <div className="modal-overlay" onClick={() => setShowShareDialog(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">What would you like to share?</h3>
+
+            <div className="share-options">
+              <label className="share-option">
+                <input
+                  type="checkbox"
+                  checked={shareIncludeTranscript}
+                  onChange={(e) => setShareIncludeTranscript(e.target.checked)}
+                />
+                <span>Transcript</span>
+              </label>
+
+              <label className="share-option">
+                <input
+                  type="checkbox"
+                  checked={shareIncludeAudio}
+                  onChange={(e) => setShareIncludeAudio(e.target.checked)}
+                />
+                <span>Audio file</span>
+              </label>
+            </div>
+
+            <div className="modal-buttons">
+              <button className="modal-button cancel" onClick={() => setShowShareDialog(false)}>
+                Cancel
+              </button>
+              <button className="modal-button confirm" onClick={handleShareConfirm}>
+                Share
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
