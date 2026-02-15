@@ -76,26 +76,29 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
       }
 
       if (recording.transcript) {
-        // Offer three options
-        const choice = prompt(
-          'What would you like to share?\n\n1 - Transcript only\n2 - Audio file only\n3 - Both transcript and audio\n\nEnter 1, 2, or 3:'
-        );
+        // Ask what to include using Yes/No dialogs
+        const includeTranscript = window.confirm('Include transcript?');
+        const includeAudio = window.confirm('Include audio file?');
 
-        if (choice === '1') {
-          await shareTranscript(recording);
-        } else if (choice === '2') {
-          await shareAudioFile(recording);
-        } else if (choice === '3') {
+        if (!includeTranscript && !includeAudio) {
+          alert('Nothing selected to share!');
+          return;
+        }
+
+        if (includeTranscript && includeAudio) {
           await shareBoth(recording);
-        } else if (choice) {
-          alert('Invalid choice. Please enter 1, 2, or 3.');
+        } else if (includeTranscript) {
+          await shareTranscript(recording);
+        } else if (includeAudio) {
+          await shareAudioFile(recording);
         }
       } else {
         await shareAudioFile(recording);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Share error:', error);
-      alert('Failed to share recording');
+      const errorMessage = error?.message || 'Unknown error';
+      alert(`Failed to share: ${errorMessage}`);
     }
   };
 
@@ -186,14 +189,23 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
 
       const message = `Recording from ${formatDate(recording.date)}\n\nTranscript:\n${recording.transcript}`;
 
-      if (navigator.canShare && navigator.canShare({ files: [file], text: message })) {
-        await navigator.share({
-          files: [file],
-          title: 'Voice Recording with Transcript',
-          text: message,
-        });
-      } else {
-        // Fallback: share transcript and download audio
+      // Try to share file + text together
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Voice Recording with Transcript',
+            text: message,
+          });
+          return; // Success!
+        } catch (shareError: any) {
+          console.error('File sharing failed:', shareError);
+          // Fall through to fallback
+        }
+      }
+
+      // Fallback: share transcript and download audio separately
+      try {
         await navigator.share({
           title: 'Recording Transcript',
           text: message,
@@ -209,11 +221,25 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         alert('Transcript shared! Audio file downloaded separately.');
+      } catch (fallbackError: any) {
+        console.error('Transcript sharing also failed:', fallbackError);
+        // Last resort: just copy to clipboard and download
+        await navigator.clipboard.writeText(recording.transcript || '');
+        const url = URL.createObjectURL(recording.audioBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `recording-${recording.id}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert('Sharing not available. Transcript copied to clipboard and audio file downloaded.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Share both error:', error);
-      alert('Failed to share. Transcript copied to clipboard.');
-      navigator.clipboard.writeText(recording.transcript || '');
+      const errorMessage = error?.message || 'Unknown error';
+      alert(`Failed to share: ${errorMessage}\n\nTranscript copied to clipboard.`);
+      await navigator.clipboard.writeText(recording.transcript || '');
     }
   };
 
