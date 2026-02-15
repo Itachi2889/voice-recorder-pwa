@@ -1,0 +1,32 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f0f0f0;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="micGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="100" cy="100" r="95" fill="url(#bgGrad)" />
+
+  <!-- Microphone body -->
+  <rect x="75" y="40" width="50" height="70" rx="25" fill="url(#micGrad)" />
+
+  <!-- Microphone stand -->
+  <rect x="95" y="110" width="10" height="40" fill="url(#micGrad)" />
+
+  <!-- Microphone base -->
+  <ellipse cx="100" cy="150" rx="30" ry="8" fill="url(#micGrad)" />
+
+  <!-- Sound waves -->
+  <path d="M 135 70 Q 145 70 145 80 Q 145 90 135 90" stroke="url(#micGrad)" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7" />
+  <path d="M 150 60 Q 165 60 165 80 Q 165 100 150 100" stroke="url(#micGrad)" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.5" />
+
+  <path d="M 65 70 Q 55 70 55 80 Q 55 90 65 90" stroke="url(#micGrad)" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7" />
+  <path d="M 50 60 Q 35 60 35 80 Q 35 100 50 100" stroke="url(#micGrad)" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.5" />
+</svg>

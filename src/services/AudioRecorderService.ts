@@ -4,6 +4,22 @@ export class AudioRecorderService {
   private stream: MediaStream | null = null;
   private startTime: number = 0;
 
+  // Pre-initialize microphone stream for faster recording start
+  async initializeMicrophone(): Promise<void> {
+    try {
+      if (this.stream) return; // Already initialized
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('MediaRecorder is not supported in this browser');
+      }
+
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+      console.error('Error initializing microphone:', error);
+      throw error;
+    }
+  }
+
   async startRecording(): Promise<void> {
     try {
       // Check if MediaRecorder is supported
@@ -11,8 +27,15 @@ export class AudioRecorderService {
         throw new Error('MediaRecorder is not supported in this browser');
       }
 
-      // Request microphone access
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Use existing stream or request new one
+      if (!this.stream) {
+        await this.initializeMicrophone();
+      }
+
+      // Ensure stream is available
+      if (!this.stream) {
+        throw new Error('Failed to initialize microphone stream');
+      }
 
       // Determine the best audio format for the browser
       let options: MediaRecorderOptions = {};
@@ -124,15 +147,20 @@ export class AudioRecorderService {
   }
 
   private cleanup(): void {
-    // Stop all tracks in the stream
+    // Keep stream alive for faster subsequent recordings
+    // Only clean up the recorder and data
+    this.mediaRecorder = null;
+    this.audioChunks = [];
+    this.startTime = 0;
+  }
+
+  // Fully release all resources including microphone stream
+  release(): void {
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
     }
-
-    this.mediaRecorder = null;
-    this.audioChunks = [];
-    this.startTime = 0;
+    this.cleanup();
   }
 
   isRecording(): boolean {

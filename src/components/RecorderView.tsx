@@ -30,6 +30,25 @@ export default function RecorderView({ onNavigateToList }: RecorderViewProps) {
     };
   }, [isRecording]);
 
+  // Pre-initialize microphone for faster recording start
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await audioService.initializeMicrophone();
+      } catch (error) {
+        // Silently fail - will request permission when user clicks record
+        console.log('Microphone not pre-initialized (will request on record)');
+      }
+    };
+
+    init();
+
+    // Cleanup on unmount
+    return () => {
+      audioService.release();
+    };
+  }, []);
+
   const startRecording = async () => {
     try {
       await audioService.startRecording();
@@ -118,7 +137,8 @@ export default function RecorderView({ onNavigateToList }: RecorderViewProps) {
 
   return (
     <div className="recorder-container">
-      <h1 className="title">Voice Recorder</h1>
+      <img src="/logo.svg" alt="VoiceTranscriber Logo" className="logo" />
+      <h1 className="title">VoiceTranscriber</h1>
 
       {onNavigateToList && (
         <button className="view-recordings-button" onClick={onNavigateToList}>

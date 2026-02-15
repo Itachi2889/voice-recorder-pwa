@@ -76,15 +76,19 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
       }
 
       if (recording.transcript) {
-        // Ask what to share
-        const shareType = window.confirm(
-          'Click OK to share transcript, Cancel to share audio file'
+        // Offer three options
+        const choice = prompt(
+          'What would you like to share?\n\n1 - Transcript only\n2 - Audio file only\n3 - Both transcript and audio\n\nEnter 1, 2, or 3:'
         );
 
-        if (shareType) {
+        if (choice === '1') {
           await shareTranscript(recording);
-        } else {
+        } else if (choice === '2') {
           await shareAudioFile(recording);
+        } else if (choice === '3') {
+          await shareBoth(recording);
+        } else if (choice) {
+          alert('Invalid choice. Please enter 1, 2, or 3.');
         }
       } else {
         await shareAudioFile(recording);
@@ -157,6 +161,59 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
       // Copy to clipboard as fallback
       navigator.clipboard.writeText(recording.transcript || '');
       alert('Transcript copied to clipboard');
+    }
+  };
+
+  const shareBoth = async (recording: Recording) => {
+    try {
+      if (!recording.audioBlob || !recording.transcript) {
+        alert('Audio or transcript not available');
+        return;
+      }
+
+      // Determine file extension
+      const ext = recording.audioBlob.type.includes('mp4')
+        ? 'mp4'
+        : recording.audioBlob.type.includes('ogg')
+        ? 'ogg'
+        : 'webm';
+
+      const file = new File(
+        [recording.audioBlob],
+        `recording-${recording.id}.${ext}`,
+        { type: recording.audioBlob.type }
+      );
+
+      const message = `Recording from ${formatDate(recording.date)}\n\nTranscript:\n${recording.transcript}`;
+
+      if (navigator.canShare && navigator.canShare({ files: [file], text: message })) {
+        await navigator.share({
+          files: [file],
+          title: 'Voice Recording with Transcript',
+          text: message,
+        });
+      } else {
+        // Fallback: share transcript and download audio
+        await navigator.share({
+          title: 'Recording Transcript',
+          text: message,
+        });
+
+        // Also download audio file
+        const url = URL.createObjectURL(recording.audioBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `recording-${recording.id}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert('Transcript shared! Audio file downloaded separately.');
+      }
+    } catch (error) {
+      console.error('Share both error:', error);
+      alert('Failed to share. Transcript copied to clipboard.');
+      navigator.clipboard.writeText(recording.transcript || '');
     }
   };
 

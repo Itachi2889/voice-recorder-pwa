@@ -9,15 +9,23 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Voice Recorder',
-        short_name: 'Recorder',
-        description: 'Voice recorder with AI transcription',
-        theme_color: '#007AFF',
-        background_color: '#ffffff',
+        name: 'VoiceTranscriber',
+        short_name: 'VoiceTranscriber',
+        description: 'AI-powered voice recording and transcription',
+        theme_color: '#667eea',
+        background_color: '#667eea',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
+        icons: [
+          {
+            src: '/logo.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any maskable'
+          }
+        ]
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
