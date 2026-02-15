@@ -35,9 +35,10 @@ export default function RecorderView({ onNavigateToList }: RecorderViewProps) {
       await audioService.startRecording();
       setIsRecording(true);
       setRecordingDuration(0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start recording:', error);
-      alert('Failed to start recording. Please check microphone permissions.');
+      const errorMessage = error?.message || 'Unknown error';
+      alert(`Failed to start recording: ${errorMessage}\n\nPlease check microphone permissions.`);
     }
   };
 
@@ -69,9 +70,11 @@ export default function RecorderView({ onNavigateToList }: RecorderViewProps) {
       if (transcribe) {
         await transcribeRecording(recording);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to stop recording:', error);
-      alert('Failed to stop recording');
+      setIsRecording(false);
+      const errorMessage = error?.message || 'Unknown error';
+      alert(`Failed to stop recording: ${errorMessage}`);
     }
   };
 
