@@ -32,29 +32,70 @@ export class StorageService {
 
   async saveRecording(recording: Recording): Promise<void> {
     const db = await this.getDB();
-    await db.put('recordings', recording);
+
+    // Convert Blob to ArrayBuffer for storage (IndexedDB compatibility)
+    if (recording.audioBlob) {
+      const arrayBuffer = await recording.audioBlob.arrayBuffer();
+      const mimeType = recording.audioBlob.type;
+
+      // Store without the Blob (only ArrayBuffer)
+      const recordingToStore = {
+        ...recording,
+        audioBlob: undefined, // Don't store Blob directly
+        audioData: arrayBuffer,
+        mimeType: mimeType,
+      };
+
+      await db.put('recordings', recordingToStore);
+    } else {
+      await db.put('recordings', recording);
+    }
   }
 
   async getAllRecordings(): Promise<Recording[]> {
     const db = await this.getDB();
     const recordings = await db.getAll('recordings');
 
-    // Convert date strings back to Date objects
-    return recordings.map(rec => ({
-      ...rec,
-      date: new Date(rec.date),
-    }));
+    // Convert date strings to Date objects and ArrayBuffer to Blob
+    return recordings.map(rec => {
+      const recording: Recording = {
+        ...rec,
+        date: new Date(rec.date),
+      };
+
+      // Reconstruct Blob from ArrayBuffer
+      if (rec.audioData && rec.mimeType) {
+        recording.audioBlob = new Blob([rec.audioData], { type: rec.mimeType });
+        // Regenerate Blob URL if needed
+        if (!recording.uri) {
+          recording.uri = URL.createObjectURL(recording.audioBlob);
+        }
+      }
+
+      return recording;
+    });
   }
 
   async getRecording(id: string): Promise<Recording | undefined> {
     const db = await this.getDB();
-    const recording = await db.get('recordings', id);
+    const rec = await db.get('recordings', id);
 
-    if (recording) {
-      return {
-        ...recording,
-        date: new Date(recording.date),
+    if (rec) {
+      const recording: Recording = {
+        ...rec,
+        date: new Date(rec.date),
       };
+
+      // Reconstruct Blob from ArrayBuffer
+      if (rec.audioData && rec.mimeType) {
+        recording.audioBlob = new Blob([rec.audioData], { type: rec.mimeType });
+        // Regenerate Blob URL if needed
+        if (!recording.uri) {
+          recording.uri = URL.createObjectURL(recording.audioBlob);
+        }
+      }
+
+      return recording;
     }
 
     return undefined;
