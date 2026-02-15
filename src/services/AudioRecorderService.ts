@@ -37,7 +37,9 @@ export class AudioRecorderService {
         }
       };
 
-      this.mediaRecorder.start();
+      // Request data every 100ms to ensure we capture audio
+      // This is especially important for iOS Safari
+      this.mediaRecorder.start(100);
     } catch (error) {
       console.error('Error starting recording:', error);
       throw error;
@@ -51,20 +53,56 @@ export class AudioRecorderService {
         return;
       }
 
+      // Check if recording is in a valid state to stop
+      const state = this.mediaRecorder.state;
+      if (state !== 'recording' && state !== 'paused') {
+        reject(new Error(`Cannot stop recording - current state: ${state}`));
+        return;
+      }
+
+      // Set timeout to prevent promise hanging
+      const timeout = setTimeout(() => {
+        reject(new Error('Stop recording timeout'));
+      }, 5000);
+
       this.mediaRecorder.onstop = () => {
-        // Get the mime type from the MediaRecorder
-        const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
+        clearTimeout(timeout);
 
-        // Create blob from all chunks
-        const audioBlob = new Blob(this.audioChunks, { type: mimeType });
+        try {
+          // Get the mime type from the MediaRecorder
+          const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
 
-        // Clean up
-        this.cleanup();
+          // Ensure we have audio data
+          if (this.audioChunks.length === 0) {
+            reject(new Error('No audio data recorded'));
+            return;
+          }
 
-        resolve(audioBlob);
+          // Create blob from all chunks
+          const audioBlob = new Blob(this.audioChunks, { type: mimeType });
+
+          // Clean up
+          this.cleanup();
+
+          resolve(audioBlob);
+        } catch (error) {
+          reject(error);
+        }
       };
 
-      this.mediaRecorder.stop();
+      this.mediaRecorder.onerror = (event) => {
+        clearTimeout(timeout);
+        this.cleanup();
+        reject(new Error(`MediaRecorder error: ${event}`));
+      };
+
+      try {
+        this.mediaRecorder.stop();
+      } catch (error) {
+        clearTimeout(timeout);
+        this.cleanup();
+        reject(error);
+      }
     });
   }
 
