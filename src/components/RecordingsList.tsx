@@ -117,47 +117,83 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
         return;
       }
 
-      // Determine file extension
-      const ext = recording.audioBlob.type.includes('mp4')
-        ? 'mp4'
-        : recording.audioBlob.type.includes('ogg')
-        ? 'ogg'
-        : 'webm';
+      // Determine file extension and ensure proper MIME type
+      let ext: string;
+      let mimeType: string;
+
+      if (recording.audioBlob.type.includes('mp4') || recording.audioBlob.type.includes('m4a')) {
+        // Use .m4a for better WhatsApp compatibility
+        ext = 'm4a';
+        mimeType = 'audio/mp4';
+      } else if (recording.audioBlob.type.includes('ogg')) {
+        ext = 'ogg';
+        mimeType = 'audio/ogg';
+      } else {
+        // WebM fallback
+        ext = 'webm';
+        mimeType = 'audio/webm';
+      }
+
+      const fileName = `recording-${new Date(recording.date).toISOString().slice(0, 19).replace(/:/g, '-')}.${ext}`;
 
       const file = new File(
         [recording.audioBlob],
-        `recording-${recording.id}.${ext}`,
-        { type: recording.audioBlob.type }
+        fileName,
+        { type: mimeType }
       );
 
-      // Try sharing if supported
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: 'Voice Recording',
-            text: `Recording from ${formatDate(recording.date)}`,
-          });
-          return; // Success!
-        } catch (shareErr: any) {
-          console.log('Share failed, falling back to download:', shareErr);
-          // Fall through to download
+      // Check if sharing is supported
+      if (navigator.share) {
+        // First check if we can share files
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Voice Recording',
+            });
+            return; // Success!
+          } catch (shareErr: any) {
+            // User cancelled or share failed
+            if (shareErr.name === 'AbortError') {
+              console.log('Share cancelled by user');
+              return; // User cancelled, don't show error
+            }
+            console.error('Share failed:', shareErr);
+            throw new Error(`Cannot share: ${shareErr.message || 'File format not supported by the selected app'}`);
+          }
+        } else {
+          throw new Error('File sharing is not supported on this device/browser');
         }
+      } else {
+        throw new Error('Web Share API is not supported on this browser');
       }
-
-      // Fallback: download the file
-      const url = URL.createObjectURL(recording.audioBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `recording-${recording.id}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      alert(`Audio file downloaded as: recording-${recording.id}.${ext}`);
     } catch (error: any) {
       console.error('Share audio error:', error);
-      alert(`Failed to share audio: ${error.message}`);
+
+      // Fallback: download the file
+      if (!recording.audioBlob) {
+        alert(`Failed to share: ${error.message}`);
+        return;
+      }
+
+      try {
+        const ext = recording.audioBlob.type.includes('mp4') ? 'm4a' :
+                    recording.audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
+        const fileName = `recording-${new Date(recording.date).toISOString().slice(0, 19).replace(/:/g, '-')}.${ext}`;
+
+        const url = URL.createObjectURL(recording.audioBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        alert(`${error.message}\n\nAudio file downloaded instead: ${fileName}`);
+      } catch (downloadError) {
+        alert(`Failed to share or download: ${error.message}`);
+      }
     }
   };
 
@@ -189,23 +225,33 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
         return;
       }
 
-      // Determine file extension
-      const ext = recording.audioBlob.type.includes('mp4')
-        ? 'mp4'
-        : recording.audioBlob.type.includes('ogg')
-        ? 'ogg'
-        : 'webm';
+      // Determine file extension and MIME type
+      let ext: string;
+      let mimeType: string;
+
+      if (recording.audioBlob.type.includes('mp4') || recording.audioBlob.type.includes('m4a')) {
+        ext = 'm4a';
+        mimeType = 'audio/mp4';
+      } else if (recording.audioBlob.type.includes('ogg')) {
+        ext = 'ogg';
+        mimeType = 'audio/ogg';
+      } else {
+        ext = 'webm';
+        mimeType = 'audio/webm';
+      }
+
+      const fileName = `recording-${new Date(recording.date).toISOString().slice(0, 19).replace(/:/g, '-')}.${ext}`;
 
       const file = new File(
         [recording.audioBlob],
-        `recording-${recording.id}.${ext}`,
-        { type: recording.audioBlob.type }
+        fileName,
+        { type: mimeType }
       );
 
       const message = `Recording from ${formatDate(recording.date)}\n\nTranscript:\n${recording.transcript}`;
 
       // Try to share file + text together
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
             files: [file],
@@ -214,47 +260,62 @@ export default function RecordingsList({ onNavigateBack }: RecordingsListProps) 
           });
           return; // Success!
         } catch (shareError: any) {
+          // User cancelled
+          if (shareError.name === 'AbortError') {
+            console.log('Share cancelled by user');
+            return;
+          }
           console.error('File sharing failed:', shareError);
           // Fall through to fallback
         }
       }
 
       // Fallback: share transcript and download audio separately
-      try {
-        await navigator.share({
-          title: 'Recording Transcript',
-          text: message,
-        });
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Recording Transcript',
+            text: message,
+          });
 
-        // Also download audio file
-        const url = URL.createObjectURL(recording.audioBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `recording-${recording.id}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        alert('Transcript shared! Audio file downloaded separately.');
-      } catch (fallbackError: any) {
-        console.error('Transcript sharing also failed:', fallbackError);
-        // Last resort: just copy to clipboard and download
-        await navigator.clipboard.writeText(recording.transcript || '');
-        const url = URL.createObjectURL(recording.audioBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `recording-${recording.id}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        alert('Sharing not available. Transcript copied to clipboard and audio file downloaded.');
+          // Also download audio file
+          const url = URL.createObjectURL(recording.audioBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          alert('Transcript shared! Audio file downloaded separately.');
+          return;
+        } catch (fallbackError: any) {
+          if (fallbackError.name === 'AbortError') {
+            console.log('Share cancelled by user');
+            return;
+          }
+          console.error('Transcript sharing also failed:', fallbackError);
+        }
       }
+
+      // Last resort: copy to clipboard and download
+      await navigator.clipboard.writeText(recording.transcript || '');
+      const url = URL.createObjectURL(recording.audioBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('Sharing not available on this browser. Transcript copied to clipboard and audio file downloaded.');
     } catch (error: any) {
       console.error('Share both error:', error);
       const errorMessage = error?.message || 'Unknown error';
       alert(`Failed to share: ${errorMessage}\n\nTranscript copied to clipboard.`);
-      await navigator.clipboard.writeText(recording.transcript || '');
+      if (recording.transcript) {
+        await navigator.clipboard.writeText(recording.transcript);
+      }
     }
   };
 
